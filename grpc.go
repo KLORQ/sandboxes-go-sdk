@@ -180,7 +180,7 @@ func (o operationClient) Wait(ctx context.Context, id string) (*Operation, error
 		if err != nil {
 			return nil, err
 		}
-		if op.State == "done" || op.State == "failed" {
+		if op.State == StateDone || op.State == StateFailed {
 			return op, nil
 		}
 		select {

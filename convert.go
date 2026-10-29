@@ -61,23 +61,23 @@ func unixTime(seconds int64) time.Time {
 func sandboxState(v localv1.SandboxState) string {
 	switch v {
 	case localv1.SandboxState_SANDBOX_STATE_PENDING:
-		return "pending"
+		return StatePending
 	case localv1.SandboxState_SANDBOX_STATE_CREATING:
-		return "creating"
+		return StateCreating
 	case localv1.SandboxState_SANDBOX_STATE_RUNNING:
-		return "running"
+		return StateRunning
 	case localv1.SandboxState_SANDBOX_STATE_STOPPING:
-		return "stopping"
+		return StateStopping
 	case localv1.SandboxState_SANDBOX_STATE_STOPPED:
-		return "stopped"
+		return StateStopped
 	case localv1.SandboxState_SANDBOX_STATE_DELETING:
-		return "deleting"
+		return StateDeleting
 	case localv1.SandboxState_SANDBOX_STATE_DELETED:
-		return "deleted"
+		return StateDeleted
 	case localv1.SandboxState_SANDBOX_STATE_FAILED:
-		return "failed"
+		return StateFailed
 	default:
-		return "unknown"
+		return StateUnknown
 	}
 }
 
@@ -92,21 +92,21 @@ func operationKind(v localv1.OperationKind) string {
 	case localv1.OperationKind_OPERATION_KIND_DELETE:
 		return "delete"
 	default:
-		return "unknown"
+		return StateUnknown
 	}
 }
 
 func operationState(v localv1.OperationState) string {
 	switch v {
 	case localv1.OperationState_OPERATION_STATE_PENDING:
-		return "pending"
+		return StatePending
 	case localv1.OperationState_OPERATION_STATE_RUNNING:
-		return "running"
+		return StateRunning
 	case localv1.OperationState_OPERATION_STATE_DONE:
-		return "done"
+		return StateDone
 	case localv1.OperationState_OPERATION_STATE_FAILED:
-		return "failed"
+		return StateFailed
 	default:
-		return "unknown"
+		return StateUnknown
 	}
 }
