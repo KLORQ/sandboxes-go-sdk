@@ -133,6 +133,33 @@ func (s sandboxClient) Delete(ctx context.Context, id string, opts DeleteOptions
 	return fromProtoOperation(resp.GetOperation()), nil
 }
 
+func (s sandboxClient) Watch(ctx context.Context, opts WatchOptions) (EventStream, error) {
+	stream, err := s.c.sandboxes.Watch(ctx, &localv1.WatchRequest{
+		SandboxId:     opts.SandboxID,
+		AfterRevision: opts.AfterRevision,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &eventStream{stream: stream}, nil
+}
+
+type eventStream struct {
+	stream grpc.ServerStreamingClient[localv1.WatchResponse]
+}
+
+func (e *eventStream) Recv() (*Event, error) {
+	resp, err := e.stream.Recv()
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return fromProtoEvent(resp), nil
+}
+
+func (e *eventStream) Close() error {
+	return e.stream.CloseSend()
+}
+
 type operationClient struct{ c *client }
 
 func (o operationClient) Get(ctx context.Context, id string) (*Operation, error) {

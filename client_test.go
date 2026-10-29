@@ -58,6 +58,24 @@ func TestClientMapsNotFound(t *testing.T) {
 	}
 }
 
+func TestClientWatch(t *testing.T) {
+	client, cleanup := newTestClient(t)
+	defer cleanup()
+
+	stream, err := client.Sandboxes().Watch(context.Background(), WatchOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = stream.Close() }()
+	event, err := stream.Recv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if event.Type != "sandbox" || event.Sandbox == nil || event.Sandbox.ID != "sb-1" {
+		t.Fatalf("unexpected event: %+v", event)
+	}
+}
+
 func TestOperationsWait(t *testing.T) {
 	client, cleanup := newTestClient(t)
 	defer cleanup()
@@ -115,6 +133,14 @@ func (fakeSandboxServer) Get(_ context.Context, req *localv1.GetRequest) (*local
 
 func (fakeSandboxServer) List(context.Context, *localv1.ListRequest) (*localv1.ListResponse, error) {
 	return &localv1.ListResponse{Items: []*localv1.Sandbox{{Id: "sb-1"}}}, nil
+}
+
+func (fakeSandboxServer) Watch(_ *localv1.WatchRequest, stream grpc.ServerStreamingServer[localv1.WatchResponse]) error {
+	return stream.Send(&localv1.WatchResponse{
+		Type:     "sandbox",
+		Sandbox:  &localv1.Sandbox{Id: "sb-1", State: localv1.SandboxState_SANDBOX_STATE_RUNNING},
+		Revision: 2,
+	})
 }
 
 type fakeOperationServer struct {

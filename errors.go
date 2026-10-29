@@ -3,6 +3,7 @@ package sandboxes
 import (
 	"context"
 	"errors"
+	"io"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -15,6 +16,9 @@ func mapError(err error) error {
 	var typed *Error
 	if errors.As(err, &typed) {
 		return typed
+	}
+	if errors.Is(err, io.EOF) {
+		return io.EOF
 	}
 	if errors.Is(err, context.Canceled) {
 		return context.Canceled

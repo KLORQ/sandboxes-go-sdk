@@ -39,6 +39,18 @@ func fromProtoOperation(in *localv1.Operation) *Operation {
 	}
 }
 
+func fromProtoEvent(in *localv1.WatchResponse) *Event {
+	if in == nil {
+		return nil
+	}
+	return &Event{
+		Type:      in.GetType(),
+		Sandbox:   fromProtoSandbox(in.GetSandbox()),
+		Operation: fromProtoOperation(in.GetOperation()),
+		Revision:  in.GetRevision(),
+	}
+}
+
 func unixTime(seconds int64) time.Time {
 	if seconds == 0 {
 		return time.Time{}

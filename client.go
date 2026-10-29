@@ -32,6 +32,7 @@ type SandboxService interface {
 	Start(ctx context.Context, id string) (*Operation, error)
 	Stop(ctx context.Context, id string, opts StopOptions) (*Operation, error)
 	Delete(ctx context.Context, id string, opts DeleteOptions) (*Operation, error)
+	Watch(ctx context.Context, opts WatchOptions) (EventStream, error)
 }
 
 // OperationService observes long-running operations.
@@ -81,6 +82,26 @@ type Operation struct {
 	Error      string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+// WatchOptions controls an event stream.
+type WatchOptions struct {
+	SandboxID     string
+	AfterRevision int64
+}
+
+// Event is one streamed state change.
+type Event struct {
+	Type      string
+	Sandbox   *Sandbox
+	Operation *Operation
+	Revision  int64
+}
+
+// EventStream receives state changes until closed.
+type EventStream interface {
+	Recv() (*Event, error)
+	Close() error
 }
 
 // ListOptions controls pagination.
