@@ -13,6 +13,20 @@ not a second business-logic layer.
 - policy and security decisions belong to the daemon and gateway;
 - the CLI and TUI consume this module instead of daemon internals.
 
+## Usage
+
+```go
+client, err := sandboxes.New(sandboxes.Config{
+	Address: "/path/to/sandboxes.sock",
+})
+if err != nil {
+	return err
+}
+defer client.Close()
+
+sb, err := client.Sandboxes().Get(ctx, "dev")
+```
+
 ## Development
 
 Requires Go 1.27.
@@ -20,4 +34,5 @@ Requires Go 1.27.
 ```sh
 make test
 make check
+make lint
 ```
