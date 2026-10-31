@@ -21,8 +21,193 @@ type Config struct {
 type Client interface {
 	Sandboxes() SandboxService
 	Operations() OperationService
+	RegistryCredentials() RegistryCredentialService
 	Close() error
 }
+
+// AccountService performs host-side provider login and logout. Provider names
+// are resolved by trusted daemon configuration; tokens never cross the API.
+type AccountService interface {
+	Login(ctx context.Context, provider string) error
+	Logout(ctx context.Context, provider string) (bool, error)
+}
+
+// Accounts returns the optional local account service for clients that support
+// the OAuth account RPC. It does not change the root Client interface.
+func Accounts(c Client) AccountService {
+	if provider, ok := c.(AccountServiceProvider); ok {
+		if service := provider.AccountService(); service != nil {
+			return service
+		}
+	}
+	return unsupportedAccountService{}
+}
+
+// AccountServiceProvider is optionally implemented by root clients that expose
+// account OAuth. It preserves compatibility for existing Client implementers.
+type AccountServiceProvider interface {
+	AccountService() AccountService
+}
+
+// DockerPATAccountService handles Docker's documented non-interactive account
+// login. Password bytes are sent only to the local daemon and never returned.
+type DockerPATAccountService interface {
+	LoginWithPAT(ctx context.Context, username string, password []byte) error
+}
+
+// DockerPATAccountServiceProvider is an optional capability that keeps the
+// root Client and existing AccountService implementations source compatible.
+type DockerPATAccountServiceProvider interface {
+	DockerPATAccountService() DockerPATAccountService
+}
+
+// DockerPATAccounts returns the optional Docker PAT login capability.
+func DockerPATAccounts(c Client) DockerPATAccountService {
+	if provider, ok := c.(DockerPATAccountServiceProvider); ok {
+		if service := provider.DockerPATAccountService(); service != nil {
+			return service
+		}
+	}
+	return unsupportedDockerPATAccountService{}
+}
+
+type unsupportedDockerPATAccountService struct{}
+
+func (unsupportedDockerPATAccountService) LoginWithPAT(context.Context, string, []byte) error {
+	return &Error{Code: errorCodeUnsupported, Message: "Docker PAT account login is not supported by this client"}
+}
+
+type unsupportedAccountService struct{}
+
+func (unsupportedAccountService) Login(context.Context, string) error {
+	return &Error{Code: errorCodeUnsupported, Message: "account service is not supported by this client"}
+}
+
+func (unsupportedAccountService) Logout(context.Context, string) (bool, error) {
+	return false, &Error{Code: errorCodeUnsupported, Message: "account service is not supported by this client"}
+}
+
+// PolicyService replaces a sandbox egress policy.
+type PolicyService interface {
+	UpdatePolicy(ctx context.Context, id string, allow, deny []NetworkRule) (*Sandbox, error)
+	MutatePolicy(ctx context.Context, id, action string, rule NetworkRule) (*Sandbox, error)
+}
+
+// PolicyServiceProvider is optionally implemented by root clients that expose
+// live policy updates without changing the root Client interface.
+type PolicyServiceProvider interface {
+	PolicyService() PolicyService
+}
+
+// Policies returns the optional policy service.
+func Policies(c Client) PolicyService {
+	if provider, ok := c.(PolicyServiceProvider); ok {
+		if service := provider.PolicyService(); service != nil {
+			return service
+		}
+	}
+	return unsupportedPolicyService{}
+}
+
+type unsupportedPolicyService struct{}
+
+func (unsupportedPolicyService) UpdatePolicy(context.Context, string, []NetworkRule, []NetworkRule) (*Sandbox, error) {
+	return nil, &Error{Code: errorCodeUnsupported, Message: "live policy updates are not supported by this client"}
+}
+
+func (unsupportedPolicyService) MutatePolicy(context.Context, string, string, NetworkRule) (*Sandbox, error) {
+	return nil, &Error{Code: errorCodeUnsupported, Message: "atomic policy updates are not supported by this client"}
+}
+
+// PortService replaces a sandbox's published ports.
+type PortService interface {
+	UpdatePorts(ctx context.Context, id string, ports []Port) (*Sandbox, error)
+}
+
+// PortServiceProvider is optionally implemented by root clients that expose
+// live port updates without changing the root Client interface.
+type PortServiceProvider interface {
+	PortService() PortService
+}
+
+// Ports returns the optional port service.
+func Ports(c Client) PortService {
+	if provider, ok := c.(PortServiceProvider); ok {
+		if service := provider.PortService(); service != nil {
+			return service
+		}
+	}
+	return unsupportedPortService{}
+}
+
+type unsupportedPortService struct{}
+
+func (unsupportedPortService) UpdatePorts(context.Context, string, []Port) (*Sandbox, error) {
+	return nil, &Error{Code: errorCodeUnsupported, Message: "live port updates are not supported by this client"}
+}
+
+// RegistryCredentialSummary is non-secret metadata for a stored registry login.
+type RegistryCredentialSummary struct {
+	Registry    string
+	Username    string
+	Scope       string
+	SandboxName string
+}
+
+// RegistryCredentialLister is an optional capability for listing stored
+// registry logins without exposing secrets.
+type RegistryCredentialLister interface {
+	ListRegistryCredentials(ctx context.Context) ([]RegistryCredentialSummary, error)
+}
+
+// RegistryCredentialList returns the optional lister.
+func RegistryCredentialList(c Client) (RegistryCredentialLister, bool) {
+	lister, ok := c.(RegistryCredentialLister)
+	return lister, ok
+}
+
+// RegistryCredentialService stores host-side registry credentials.
+type RegistryCredentialService interface {
+	Login(ctx context.Context, req RegistryLoginRequest) (*RegistryLoginResponse, error)
+	Logout(ctx context.Context, req RegistryLogoutRequest) (*RegistryLogoutResponse, error)
+}
+
+// RegistryLoginRequest contains a registry credential. Password is sent only
+// to the local daemon and must never be logged or placed in process arguments.
+type RegistryLoginRequest struct {
+	Registry    string
+	Username    string
+	Password    []byte
+	Scope       RegistryCredentialScope
+	SandboxName string
+}
+
+// RegistryCredentialScope limits which registry operations may use a login.
+type RegistryCredentialScope string
+
+const (
+	RegistryScopeHostOnly     RegistryCredentialScope = "host-only"
+	RegistryScopeAllSandboxes RegistryCredentialScope = "all-sandboxes"
+	RegistryScopeSandbox      RegistryCredentialScope = "sandbox"
+)
+
+// RegistryLoginResponse reports the non-secret login metadata.
+type RegistryLoginResponse struct {
+	Registry    string
+	Username    string
+	Scope       RegistryCredentialScope
+	SandboxName string
+}
+
+// RegistryLogoutRequest selects one host-side registry credential entry.
+type RegistryLogoutRequest struct {
+	Registry    string
+	Scope       RegistryCredentialScope
+	SandboxName string
+}
+
+// RegistryLogoutResponse reports whether an entry was removed.
+type RegistryLogoutResponse struct{ Removed bool }
 
 // SandboxService manages sandbox lifecycle.
 type SandboxService interface {
@@ -42,14 +227,44 @@ type OperationService interface {
 }
 
 // CreateRequest describes a sandbox create request.
+// NetworkRule is a CIDR/protocol/port egress rule.
+type NetworkRule struct {
+	Protocol string
+	CIDR     string
+	Port     uint16
+}
+
+// Port maps a host loopback port to a guest port.
+type Port struct {
+	Host     uint16
+	Guest    uint16
+	Protocol string
+}
+
+// Workspace is a host path mounted at the same absolute path in the guest.
+type Workspace struct {
+	Path     string
+	ReadOnly bool
+}
+
 type CreateRequest struct {
 	Name           string
 	Image          string
 	Workspace      string
 	IdempotencyKey string
+	// Zero selects the daemon default for each resource.
+	CPUs       uint32
+	MemoryMiB  uint32
+	Workspaces []Workspace
+	Ports      []Port
+	Allow      []NetworkRule
+	Deny       []NetworkRule
+	Agent      string
+	Detached   bool
 }
 
-// StopOptions controls graceful shutdown.
+// StopOptions controls graceful shutdown. Zero selects the daemon default;
+// positive durations are rounded up to seconds, up to one hour.
 type StopOptions struct {
 	Grace time.Duration
 }
@@ -67,6 +282,16 @@ type Sandbox struct {
 	Generation int64
 	Image      string
 	Workspace  string
+	Workspaces []Workspace
+	Ports      []Port
+	Allow      []NetworkRule
+	Deny       []NetworkRule
+	Agent      string
+	Detached   bool
+	LastUsedAt time.Time
+	CPUs       uint32
+	MemoryMiB  uint32
+	StoppedAt  time.Time
 	Error      string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
@@ -98,7 +323,9 @@ type Event struct {
 	Revision  int64
 }
 
-// EventStream receives state changes until closed.
+// EventStream receives state changes until closed. Close cancels the underlying
+// watch and unblocks any pending Recv; callers should close streams they no
+// longer need.
 type EventStream interface {
 	Recv() (*Event, error)
 	Close() error
