@@ -91,6 +91,8 @@ func (unsupportedAccountService) Logout(context.Context, string) (bool, error) {
 type PolicyService interface {
 	UpdatePolicy(ctx context.Context, id string, allow, deny []NetworkRule) (*Sandbox, error)
 	MutatePolicy(ctx context.Context, id, action string, rule NetworkRule) (*Sandbox, error)
+	GetPolicyProfile(ctx context.Context) (string, error)
+	SetPolicyProfile(ctx context.Context, profile string) (string, error)
 }
 
 // PolicyServiceProvider is optionally implemented by root clients that expose
@@ -117,6 +119,14 @@ func (unsupportedPolicyService) UpdatePolicy(context.Context, string, []NetworkR
 
 func (unsupportedPolicyService) MutatePolicy(context.Context, string, string, NetworkRule) (*Sandbox, error) {
 	return nil, &Error{Code: errorCodeUnsupported, Message: "atomic policy updates are not supported by this client"}
+}
+
+func (unsupportedPolicyService) GetPolicyProfile(context.Context) (string, error) {
+	return "", &Error{Code: errorCodeUnsupported, Message: "policy profiles are not supported by this client"}
+}
+
+func (unsupportedPolicyService) SetPolicyProfile(context.Context, string) (string, error) {
+	return "", &Error{Code: errorCodeUnsupported, Message: "policy profiles are not supported by this client"}
 }
 
 // PortService replaces a sandbox's published ports.
@@ -253,14 +263,15 @@ type CreateRequest struct {
 	Workspace      string
 	IdempotencyKey string
 	// Zero selects the daemon default for each resource.
-	CPUs       uint32
-	MemoryMiB  uint32
-	Workspaces []Workspace
-	Ports      []Port
-	Allow      []NetworkRule
-	Deny       []NetworkRule
-	Agent      string
-	Detached   bool
+	CPUs          uint32
+	MemoryMiB     uint32
+	Workspaces    []Workspace
+	Ports         []Port
+	Allow         []NetworkRule
+	Deny          []NetworkRule
+	Agent         string
+	Detached      bool
+	PolicyProfile string
 	// Env is baked into the sandbox for every process, including exec.
 	Env map[string]string
 }
@@ -278,25 +289,26 @@ type DeleteOptions struct {
 
 // Sandbox is the public sandbox representation.
 type Sandbox struct {
-	ID         string
-	Name       string
-	State      string
-	Generation int64
-	Image      string
-	Workspace  string
-	Workspaces []Workspace
-	Ports      []Port
-	Allow      []NetworkRule
-	Deny       []NetworkRule
-	Agent      string
-	Detached   bool
-	LastUsedAt time.Time
-	CPUs       uint32
-	MemoryMiB  uint32
-	StoppedAt  time.Time
-	Error      string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID            string
+	Name          string
+	State         string
+	Generation    int64
+	Image         string
+	Workspace     string
+	Workspaces    []Workspace
+	Ports         []Port
+	Allow         []NetworkRule
+	Deny          []NetworkRule
+	Agent         string
+	Detached      bool
+	PolicyProfile string
+	LastUsedAt    time.Time
+	CPUs          uint32
+	MemoryMiB     uint32
+	StoppedAt     time.Time
+	Error         string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // Operation is the public operation representation.

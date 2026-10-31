@@ -34,11 +34,11 @@ func TestCreatePassesEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = client.Close() })
-	if _, err := client.Sandboxes().Create(context.Background(), CreateRequest{Name: "dev", Env: map[string]string{"A": "1"}}); err != nil {
+	if _, err := client.Sandboxes().Create(context.Background(), CreateRequest{Name: "dev", Env: map[string]string{"A": "1"}, PolicyProfile: "balanced"}); err != nil {
 		t.Fatal(err)
 	}
 	req := <-capture.request
-	if req.GetEnv()["A"] != "1" {
+	if req.GetEnv()["A"] != "1" || req.GetPolicyProfile() != "balanced" {
 		t.Fatalf("env=%v", req.GetEnv())
 	}
 }

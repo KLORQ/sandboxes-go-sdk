@@ -80,6 +80,26 @@ func (c *client) MutatePolicy(ctx context.Context, id, action string, rule Netwo
 	return fromProtoSandbox(resp.GetSandbox())
 }
 
+func (c *client) GetPolicyProfile(ctx context.Context) (string, error) {
+	ctx, cancel := c.context(ctx)
+	defer cancel()
+	resp, err := c.sandboxes.GetPolicyProfile(ctx, &localv1.GetPolicyProfileRequest{})
+	if err != nil {
+		return "", mapError(err)
+	}
+	return resp.GetProfile(), nil
+}
+
+func (c *client) SetPolicyProfile(ctx context.Context, profile string) (string, error) {
+	ctx, cancel := c.context(ctx)
+	defer cancel()
+	resp, err := c.sandboxes.SetPolicyProfile(ctx, &localv1.SetPolicyProfileRequest{Profile: profile})
+	if err != nil {
+		return "", mapError(err)
+	}
+	return resp.GetProfile(), nil
+}
+
 func (c *client) PortService() PortService { return c }
 
 func (c *client) UpdatePorts(ctx context.Context, id string, ports []Port) (*Sandbox, error) {
@@ -136,12 +156,33 @@ func (s sandboxClient) Create(ctx context.Context, req CreateRequest) (*Operatio
 		Deny:           toProtoRules(req.Deny),
 		Agent:          req.Agent,
 		Detached:       req.Detached,
+		PolicyProfile:  req.PolicyProfile,
 		Env:            req.Env,
 	})
 	if err != nil {
 		return nil, mapError(err)
 	}
 	return fromProtoOperation(resp.GetOperation()), nil
+}
+
+func (s sandboxClient) GetPolicyProfile(ctx context.Context) (string, error) {
+	ctx, cancel := s.c.context(ctx)
+	defer cancel()
+	resp, err := s.c.sandboxes.GetPolicyProfile(ctx, &localv1.GetPolicyProfileRequest{})
+	if err != nil {
+		return "", mapError(err)
+	}
+	return resp.GetProfile(), nil
+}
+
+func (s sandboxClient) SetPolicyProfile(ctx context.Context, profile string) (string, error) {
+	ctx, cancel := s.c.context(ctx)
+	defer cancel()
+	resp, err := s.c.sandboxes.SetPolicyProfile(ctx, &localv1.SetPolicyProfileRequest{Profile: profile})
+	if err != nil {
+		return "", mapError(err)
+	}
+	return resp.GetProfile(), nil
 }
 
 func (s sandboxClient) Get(ctx context.Context, id string) (*Sandbox, error) {
