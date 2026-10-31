@@ -136,6 +136,7 @@ func (s sandboxClient) Create(ctx context.Context, req CreateRequest) (*Operatio
 		Deny:           toProtoRules(req.Deny),
 		Agent:          req.Agent,
 		Detached:       req.Detached,
+		Env:            req.Env,
 	})
 	if err != nil {
 		return nil, mapError(err)
