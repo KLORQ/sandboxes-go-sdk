@@ -261,6 +261,8 @@ type CreateRequest struct {
 	Deny       []NetworkRule
 	Agent      string
 	Detached   bool
+	// Env is baked into the sandbox for every process, including exec.
+	Env map[string]string
 }
 
 // StopOptions controls graceful shutdown. Zero selects the daemon default;
