@@ -52,6 +52,8 @@ func (c *client) RegistryCredentials() RegistryCredentialService {
 
 func (c *client) AccountService() AccountService { return accountServiceClient{c: c} }
 
+func (c *client) VersionService() VersionService { return versionClient{c: c} }
+
 func (c *client) DockerPATAccountService() DockerPATAccountService { return accountServiceClient{c: c} }
 
 func (c *client) PolicyService() PolicyService { return c }
@@ -257,6 +259,18 @@ func (e *eventStream) Close() error {
 }
 
 type operationClient struct{ c *client }
+
+type versionClient struct{ c *client }
+
+func (v versionClient) Get(ctx context.Context) (VersionInfo, error) {
+	ctx, cancel := v.c.context(ctx)
+	defer cancel()
+	resp, err := v.c.sandboxes.GetVersion(ctx, &localv1.GetVersionRequest{})
+	if err != nil {
+		return VersionInfo{}, mapError(err)
+	}
+	return VersionInfo{Version: resp.GetVersion(), APIVersion: resp.GetApiVersion()}, nil
+}
 
 type registryCredentialClient struct{ c *client }
 

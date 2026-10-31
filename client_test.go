@@ -243,6 +243,28 @@ func TestAccountsHandlesMissingProvider(t *testing.T) {
 	}
 }
 
+func TestVersionService(t *testing.T) {
+	client, cleanup := newTestClient(t)
+	defer cleanup()
+	info, err := Version(client).Get(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Version != "0.0.9" || info.APIVersion != "0.0.5" {
+		t.Fatalf("version info = %+v", info)
+	}
+}
+
+func TestVersionHandlesMissingProvider(t *testing.T) {
+	for _, client := range []Client{nil, nilAccountProvider{}} {
+		_, err := Version(client).Get(context.Background())
+		var typed *Error
+		if !errors.As(err, &typed) || typed.Code != errorCodeUnsupported {
+			t.Fatalf("missing version provider returned %v", err)
+		}
+	}
+}
+
 func newTestClient(t *testing.T) (Client, func()) {
 	t.Helper()
 	lis := bufconn.Listen(1024 * 1024)
@@ -321,6 +343,10 @@ func (fakeSandboxServer) Exec(_ *localv1.ExecRequest, stream grpc.ServerStreamin
 
 func (fakeSandboxServer) Stop(_ context.Context, req *localv1.StopRequest) (*localv1.StopResponse, error) {
 	return &localv1.StopResponse{Operation: &localv1.Operation{Id: strconv.FormatInt(req.GetGraceSeconds(), 10)}}, nil
+}
+
+func (fakeSandboxServer) GetVersion(context.Context, *localv1.GetVersionRequest) (*localv1.GetVersionResponse, error) {
+	return &localv1.GetVersionResponse{Version: "0.0.9", ApiVersion: "0.0.5"}, nil
 }
 
 func (fakeSandboxServer) Get(_ context.Context, req *localv1.GetRequest) (*localv1.GetResponse, error) {
