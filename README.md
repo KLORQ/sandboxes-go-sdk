@@ -27,6 +27,18 @@ defer client.Close()
 sb, err := client.Sandboxes().Get(ctx, "dev")
 ```
 
+`client.RegistryCredentials().Login` and `.Logout` manage host-side registry
+credential entries. `RegistryLoginRequest.Password` is sent only to the local
+daemon; callers should clear the byte slice after the call. The SDK does not
+log credentials or make policy decisions. Guest registry pulls remain
+unsupported until the host broker is connected to the gateway.
+
+`sandboxes.Accounts(client)` optionally exposes host-side OAuth account login
+and logout. It accepts only a provider name; the daemon resolves endpoints and
+client registration from trusted host configuration. OAuth tokens are never
+returned by the SDK. Existing implementations of `Client` remain compatible;
+clients without account RPC support return an `unsupported` error.
+
 ## Development
 
 Requires Go 1.27.

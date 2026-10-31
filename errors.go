@@ -9,6 +9,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const errorCodeInvalidArgument = "invalid_argument"
+const errorCodeUnsupported = "unsupported"
+const errorCodeInternal = "internal"
+
 func mapError(err error) error {
 	if err == nil {
 		return nil
@@ -27,7 +31,7 @@ func mapError(err error) error {
 		return context.DeadlineExceeded
 	}
 
-	code := "internal"
+	code := errorCodeInternal
 	retryable := false
 	switch status.Code(err) {
 	case codes.NotFound:
@@ -37,7 +41,7 @@ func mapError(err error) error {
 	case codes.Aborted, codes.FailedPrecondition:
 		code = "conflict"
 	case codes.InvalidArgument:
-		code = "invalid_argument"
+		code = errorCodeInvalidArgument
 	case codes.PermissionDenied, codes.Unauthenticated:
 		code = "permission_denied"
 	case codes.Unavailable:

@@ -14,6 +14,8 @@ type client struct {
 	conn        *grpc.ClientConn
 	sandboxes   localv1.SandboxServiceClient
 	operations  localv1.OperationServiceClient
+	registry    localv1.RegistryCredentialServiceClient
+	accounts    localv1.AccountServiceClient
 	callTimeout time.Duration
 }
 
@@ -34,6 +36,8 @@ func New(cfg Config) (Client, error) {
 		conn:        conn,
 		sandboxes:   localv1.NewSandboxServiceClient(conn),
 		operations:  localv1.NewOperationServiceClient(conn),
+		registry:    localv1.NewRegistryCredentialServiceClient(conn),
+		accounts:    localv1.NewAccountServiceClient(conn),
 		callTimeout: cfg.CallTimeout,
 	}, nil
 }
@@ -41,6 +45,69 @@ func New(cfg Config) (Client, error) {
 func (c *client) Sandboxes() SandboxService { return sandboxClient{c: c} }
 
 func (c *client) Operations() OperationService { return operationClient{c: c} }
+
+func (c *client) RegistryCredentials() RegistryCredentialService {
+	return registryCredentialClient{c: c}
+}
+
+func (c *client) AccountService() AccountService { return accountServiceClient{c: c} }
+
+func (c *client) DockerPATAccountService() DockerPATAccountService { return accountServiceClient{c: c} }
+
+func (c *client) PolicyService() PolicyService { return c }
+
+func (c *client) UpdatePolicy(ctx context.Context, id string, allow, deny []NetworkRule) (*Sandbox, error) {
+	ctx, cancel := c.context(ctx)
+	defer cancel()
+	resp, err := c.sandboxes.UpdatePolicy(ctx, &localv1.UpdatePolicyRequest{
+		Id: id, Allow: toProtoRules(allow), Deny: toProtoRules(deny),
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return fromProtoSandbox(resp.GetSandbox())
+}
+
+func (c *client) MutatePolicy(ctx context.Context, id, action string, rule NetworkRule) (*Sandbox, error) {
+	ctx, cancel := c.context(ctx)
+	defer cancel()
+	resp, err := c.sandboxes.MutatePolicy(ctx, &localv1.MutatePolicyRequest{
+		Id: id, Action: action, Rule: toProtoRules([]NetworkRule{rule})[0],
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return fromProtoSandbox(resp.GetSandbox())
+}
+
+func (c *client) PortService() PortService { return c }
+
+func (c *client) UpdatePorts(ctx context.Context, id string, ports []Port) (*Sandbox, error) {
+	ctx, cancel := c.context(ctx)
+	defer cancel()
+	resp, err := c.sandboxes.UpdatePorts(ctx, &localv1.UpdatePortsRequest{Id: id, Ports: toProtoPorts(ports)})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return fromProtoSandbox(resp.GetSandbox())
+}
+
+func (c *client) ListRegistryCredentials(ctx context.Context) ([]RegistryCredentialSummary, error) {
+	ctx, cancel := c.context(ctx)
+	defer cancel()
+	resp, err := c.registry.List(ctx, &localv1.RegistryCredentialServiceListRequest{})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	out := make([]RegistryCredentialSummary, 0, len(resp.GetCredentials()))
+	for _, item := range resp.GetCredentials() {
+		out = append(out, RegistryCredentialSummary{
+			Registry: item.GetRegistry(), Username: item.GetUsername(),
+			Scope: item.GetScope(), SandboxName: item.GetSandboxName(),
+		})
+	}
+	return out, nil
+}
 
 func (c *client) Close() error { return c.conn.Close() }
 
@@ -61,6 +128,14 @@ func (s sandboxClient) Create(ctx context.Context, req CreateRequest) (*Operatio
 		Image:          req.Image,
 		Workspace:      req.Workspace,
 		IdempotencyKey: req.IdempotencyKey,
+		Cpus:           req.CPUs,
+		MemoryMib:      req.MemoryMiB,
+		Workspaces:     toProtoWorkspaces(req.Workspaces),
+		Ports:          toProtoPorts(req.Ports),
+		Allow:          toProtoRules(req.Allow),
+		Deny:           toProtoRules(req.Deny),
+		Agent:          req.Agent,
+		Detached:       req.Detached,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -75,12 +150,12 @@ func (s sandboxClient) Get(ctx context.Context, id string) (*Sandbox, error) {
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return fromProtoSandbox(resp.GetSandbox()), nil
+	return fromProtoSandbox(resp.GetSandbox())
 }
 
 func (s sandboxClient) List(ctx context.Context, opts ListOptions) (*Page[Sandbox], error) {
 	if opts.PageSize < 0 || opts.PageSize > 1<<31-1 {
-		return nil, &Error{Code: "invalid_argument", Message: "page size out of range"}
+		return nil, &Error{Code: errorCodeInvalidArgument, Message: "page size out of range"}
 	}
 	ctx, cancel := s.c.context(ctx)
 	defer cancel()
@@ -93,7 +168,11 @@ func (s sandboxClient) List(ctx context.Context, opts ListOptions) (*Page[Sandbo
 	}
 	items := make([]Sandbox, 0, len(resp.GetItems()))
 	for _, item := range resp.GetItems() {
-		if sb := fromProtoSandbox(item); sb != nil {
+		sb, err := fromProtoSandbox(item)
+		if err != nil {
+			return nil, err
+		}
+		if sb != nil {
 			items = append(items, *sb)
 		}
 	}
@@ -111,11 +190,18 @@ func (s sandboxClient) Start(ctx context.Context, id string) (*Operation, error)
 }
 
 func (s sandboxClient) Stop(ctx context.Context, id string, opts StopOptions) (*Operation, error) {
+	if opts.Grace < 0 || opts.Grace > time.Hour {
+		return nil, &Error{Code: errorCodeInvalidArgument, Message: "stop grace must be between zero and one hour"}
+	}
+	seconds := int64(opts.Grace / time.Second)
+	if opts.Grace%time.Second != 0 {
+		seconds++
+	}
 	ctx, cancel := s.c.context(ctx)
 	defer cancel()
 	resp, err := s.c.sandboxes.Stop(ctx, &localv1.StopRequest{
 		Id:           id,
-		GraceSeconds: int64(opts.Grace / time.Second),
+		GraceSeconds: seconds,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -134,33 +220,145 @@ func (s sandboxClient) Delete(ctx context.Context, id string, opts DeleteOptions
 }
 
 func (s sandboxClient) Watch(ctx context.Context, opts WatchOptions) (EventStream, error) {
-	stream, err := s.c.sandboxes.Watch(ctx, &localv1.WatchRequest{
+	streamCtx, cancel := context.WithCancel(ctx)
+	stream, err := s.c.sandboxes.Watch(streamCtx, &localv1.WatchRequest{
 		SandboxId:     opts.SandboxID,
 		AfterRevision: opts.AfterRevision,
 	})
 	if err != nil {
+		cancel()
 		return nil, mapError(err)
 	}
-	return &eventStream{stream: stream}, nil
+	return &eventStream{stream: stream, cancel: cancel}, nil
 }
 
 type eventStream struct {
 	stream grpc.ServerStreamingClient[localv1.WatchResponse]
+	cancel context.CancelFunc
 }
 
 func (e *eventStream) Recv() (*Event, error) {
 	resp, err := e.stream.Recv()
 	if err != nil {
+		e.cancel()
 		return nil, mapError(err)
 	}
-	return fromProtoEvent(resp), nil
+	event, err := fromProtoEvent(resp)
+	if err != nil {
+		e.cancel()
+	}
+	return event, err
 }
 
 func (e *eventStream) Close() error {
+	e.cancel()
 	return e.stream.CloseSend()
 }
 
 type operationClient struct{ c *client }
+
+type registryCredentialClient struct{ c *client }
+
+type accountServiceClient struct{ c *client }
+
+func (a accountServiceClient) Login(ctx context.Context, provider string) error {
+	ctx, cancel := a.c.context(ctx)
+	defer cancel()
+	resp, err := a.c.accounts.Login(ctx, &localv1.AccountServiceLoginRequest{Provider: provider})
+	if err != nil {
+		return mapError(err)
+	}
+	if !resp.GetAuthenticated() {
+		return &Error{Code: "failed_precondition", Message: "account provider did not confirm authentication"}
+	}
+	return nil
+}
+
+func (a accountServiceClient) LoginWithPAT(ctx context.Context, username string, password []byte) error {
+	ctx, cancel := a.c.context(ctx)
+	defer cancel()
+	resp, err := a.c.accounts.LoginWithPAT(ctx, &localv1.AccountServiceLoginWithPATRequest{
+		Username: username,
+		Password: password,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if !resp.GetAuthenticated() {
+		return &Error{Code: "unauthenticated", Message: "Docker Hub did not confirm authentication"}
+	}
+	return nil
+}
+
+func (a accountServiceClient) Logout(ctx context.Context, provider string) (bool, error) {
+	ctx, cancel := a.c.context(ctx)
+	defer cancel()
+	resp, err := a.c.accounts.Logout(ctx, &localv1.AccountServiceLogoutRequest{Provider: provider})
+	if err != nil {
+		return false, mapError(err)
+	}
+	return resp.GetRemoved(), nil
+}
+
+func (r registryCredentialClient) Login(ctx context.Context, req RegistryLoginRequest) (*RegistryLoginResponse, error) {
+	ctx, cancel := r.c.context(ctx)
+	defer cancel()
+	scope, err := registryScopeToProto(req.Scope)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := r.c.registry.Login(ctx, &localv1.RegistryCredentialServiceLoginRequest{
+		Registry: req.Registry, Username: req.Username, Password: req.Password,
+		Scope: scope, SandboxName: req.SandboxName,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &RegistryLoginResponse{
+		Registry: resp.GetRegistry(), Username: resp.GetUsername(),
+		Scope: registryScopeFromProto(resp.GetScope()), SandboxName: resp.GetSandboxName(),
+	}, nil
+}
+
+func (r registryCredentialClient) Logout(ctx context.Context, req RegistryLogoutRequest) (*RegistryLogoutResponse, error) {
+	ctx, cancel := r.c.context(ctx)
+	defer cancel()
+	scope, err := registryScopeToProto(req.Scope)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := r.c.registry.Logout(ctx, &localv1.RegistryCredentialServiceLogoutRequest{
+		Registry: req.Registry, Scope: scope, SandboxName: req.SandboxName,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &RegistryLogoutResponse{Removed: resp.GetRemoved()}, nil
+}
+
+func registryScopeToProto(scope RegistryCredentialScope) (localv1.RegistryCredentialScope, error) {
+	switch scope {
+	case "", RegistryScopeHostOnly:
+		return localv1.RegistryCredentialScope_REGISTRY_CREDENTIAL_SCOPE_HOST_ONLY, nil
+	case RegistryScopeAllSandboxes:
+		return localv1.RegistryCredentialScope_REGISTRY_CREDENTIAL_SCOPE_ALL_SANDBOXES, nil
+	case RegistryScopeSandbox:
+		return localv1.RegistryCredentialScope_REGISTRY_CREDENTIAL_SCOPE_SANDBOX, nil
+	default:
+		return localv1.RegistryCredentialScope_REGISTRY_CREDENTIAL_SCOPE_UNSPECIFIED, &Error{Code: errorCodeInvalidArgument, Message: "unsupported registry credential scope"}
+	}
+}
+
+func registryScopeFromProto(scope localv1.RegistryCredentialScope) RegistryCredentialScope {
+	switch scope {
+	case localv1.RegistryCredentialScope_REGISTRY_CREDENTIAL_SCOPE_ALL_SANDBOXES:
+		return RegistryScopeAllSandboxes
+	case localv1.RegistryCredentialScope_REGISTRY_CREDENTIAL_SCOPE_SANDBOX:
+		return RegistryScopeSandbox
+	default:
+		return RegistryScopeHostOnly
+	}
+}
 
 func (o operationClient) Get(ctx context.Context, id string) (*Operation, error) {
 	ctx, cancel := o.c.context(ctx)
