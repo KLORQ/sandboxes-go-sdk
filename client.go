@@ -95,6 +95,14 @@ type PolicyService interface {
 	SetPolicyProfile(ctx context.Context, profile string) (string, error)
 	GetGlobalPolicy(ctx context.Context) (allow, deny []NetworkRule, err error)
 	MutateGlobalPolicy(ctx context.Context, action string, rule NetworkRule) (allow, deny []NetworkRule, err error)
+	Check(ctx context.Context, id, protocol, address, domain string, port uint16) (PolicyDecision, error)
+}
+
+// PolicyDecision is a gateway-consistent policy result.
+type PolicyDecision struct {
+	Allowed bool
+	RuleID  string
+	Reason  string
 }
 
 // PolicyServiceProvider is optionally implemented by root clients that expose
@@ -137,6 +145,10 @@ func (unsupportedPolicyService) GetGlobalPolicy(context.Context) ([]NetworkRule,
 
 func (unsupportedPolicyService) MutateGlobalPolicy(context.Context, string, NetworkRule) ([]NetworkRule, []NetworkRule, error) {
 	return nil, nil, &Error{Code: errorCodeUnsupported, Message: "global policy is not supported by this client"}
+}
+
+func (unsupportedPolicyService) Check(context.Context, string, string, string, string, uint16) (PolicyDecision, error) {
+	return PolicyDecision{}, &Error{Code: errorCodeUnsupported, Message: "policy checks are not supported by this client"}
 }
 
 // PortService replaces a sandbox's published ports.

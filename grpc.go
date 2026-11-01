@@ -116,6 +116,18 @@ func (c *client) MutateGlobalPolicy(ctx context.Context, action string, rule Net
 	return fromProtoRules(resp.GetAllow()), fromProtoRules(resp.GetDeny()), nil
 }
 
+func (c *client) Check(ctx context.Context, id, protocol, address, domain string, port uint16) (PolicyDecision, error) {
+	ctx, cancel := c.context(ctx)
+	defer cancel()
+	resp, err := c.sandboxes.CheckPolicy(ctx, &localv1.CheckPolicyRequest{
+		SandboxId: id, Protocol: protocol, Address: address, Domain: domain, Port: uint32(port),
+	})
+	if err != nil {
+		return PolicyDecision{}, mapError(err)
+	}
+	return PolicyDecision{Allowed: resp.GetAllowed(), RuleID: resp.GetRuleId(), Reason: resp.GetReason()}, nil
+}
+
 func (c *client) SetPolicyProfile(ctx context.Context, profile string) (string, error) {
 	ctx, cancel := c.context(ctx)
 	defer cancel()
