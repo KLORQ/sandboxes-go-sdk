@@ -46,7 +46,7 @@ func TestClientGetAndList(t *testing.T) {
 	if sb.ID != "sb-1" || sb.State != "running" || sb.CPUs != 4 || sb.MemoryMiB != 2048 || sb.StoppedAt.Unix() != 200 ||
 		len(sb.Workspaces) != 2 || !sb.Workspaces[1].ReadOnly || len(sb.Ports) != 1 || sb.Ports[0].Host != 8080 ||
 		len(sb.Allow) != 1 || sb.Allow[0].Port != 80 || len(sb.Deny) != 1 || sb.Deny[0].Protocol != "udp" ||
-		sb.Agent != "shell" || !sb.Detached || sb.LastUsedAt.Unix() != 300 {
+		sb.Agent != "shell" || !sb.Detached || sb.PolicyProfile != "balanced" || sb.LastUsedAt.Unix() != 300 {
 		t.Fatalf("unexpected sandbox: %+v", sb)
 	}
 
@@ -328,6 +328,14 @@ type fakeSandboxServer struct {
 	localv1.UnimplementedSandboxServiceServer
 }
 
+func (fakeSandboxServer) GetPolicyProfile(context.Context, *localv1.GetPolicyProfileRequest) (*localv1.GetPolicyProfileResponse, error) {
+	return &localv1.GetPolicyProfileResponse{Profile: "balanced"}, nil
+}
+
+func (fakeSandboxServer) SetPolicyProfile(_ context.Context, req *localv1.SetPolicyProfileRequest) (*localv1.SetPolicyProfileResponse, error) {
+	return &localv1.SetPolicyProfileResponse{Profile: req.GetProfile()}, nil
+}
+
 func (fakeSandboxServer) Exec(_ *localv1.ExecRequest, stream grpc.ServerStreamingServer[localv1.ExecResponse]) error {
 	for _, frame := range []*localv1.ExecResponse{
 		{Frame: &localv1.ExecResponse_Stdout{Stdout: []byte("out")}},
@@ -368,7 +376,7 @@ func (fakeSandboxServer) Get(_ context.Context, req *localv1.GetRequest) (*local
 		Ports: []*localv1.Port{{Host: 8080, Guest: 3000, Protocol: "tcp"}},
 		Allow: []*localv1.NetworkRule{{Protocol: "tcp", Cidr: "0.0.0.0/0", Port: 80}},
 		Deny:  []*localv1.NetworkRule{{Protocol: "udp", Cidr: "10.0.0.0/8", Port: 53}},
-		Agent: "shell", Detached: true, LastUsedAtUnix: 300,
+		Agent: "shell", Detached: true, PolicyProfile: "balanced", LastUsedAtUnix: 300,
 	}}, nil
 }
 
@@ -395,4 +403,17 @@ func (fakeOperationServer) Get(context.Context, *localv1.OperationServiceGetRequ
 		Kind:      localv1.OperationKind_OPERATION_KIND_CREATE,
 		State:     localv1.OperationState_OPERATION_STATE_DONE,
 	}}, nil
+}
+
+func TestClientPolicyProfile(t *testing.T) {
+	client, cleanup := newTestClient(t)
+	defer cleanup()
+	profile, err := Policies(client).GetPolicyProfile(context.Background())
+	if err != nil || profile != "balanced" {
+		t.Fatalf("profile=%q err=%v", profile, err)
+	}
+	profile, err = Policies(client).SetPolicyProfile(context.Background(), "allow-all")
+	if err != nil || profile != "allow-all" {
+		t.Fatalf("set profile=%q err=%v", profile, err)
+	}
 }

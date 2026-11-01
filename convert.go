@@ -14,25 +14,26 @@ func fromProtoSandbox(in *localv1.Sandbox) (*Sandbox, error) {
 		return nil, err
 	}
 	return &Sandbox{
-		ID:         in.GetId(),
-		Name:       in.GetName(),
-		State:      sandboxState(in.GetState()),
-		Generation: in.GetGeneration(),
-		Image:      in.GetImage(),
-		Workspace:  in.GetWorkspace(),
-		Workspaces: fromProtoWorkspaces(in.GetWorkspaces()),
-		Ports:      fromProtoPorts(in.GetPorts()),
-		Allow:      fromProtoRules(in.GetAllow()),
-		Deny:       fromProtoRules(in.GetDeny()),
-		Agent:      in.GetAgent(),
-		Detached:   in.GetDetached(),
-		LastUsedAt: protoLastUsed(in),
-		CPUs:       in.GetCpus(),
-		MemoryMiB:  in.GetMemoryMib(),
-		StoppedAt:  unixTime(in.GetStoppedAtUnix()),
-		Error:      in.GetError(),
-		CreatedAt:  unixTime(in.GetCreatedAtUnix()),
-		UpdatedAt:  unixTime(in.GetUpdatedAtUnix()),
+		ID:            in.GetId(),
+		Name:          in.GetName(),
+		State:         sandboxState(in.GetState()),
+		Generation:    in.GetGeneration(),
+		Image:         in.GetImage(),
+		Workspace:     in.GetWorkspace(),
+		Workspaces:    fromProtoWorkspaces(in.GetWorkspaces()),
+		Ports:         fromProtoPorts(in.GetPorts()),
+		Allow:         fromProtoRules(in.GetAllow()),
+		Deny:          fromProtoRules(in.GetDeny()),
+		Agent:         in.GetAgent(),
+		Detached:      in.GetDetached(),
+		PolicyProfile: in.GetPolicyProfile(),
+		LastUsedAt:    protoLastUsed(in),
+		CPUs:          in.GetCpus(),
+		MemoryMiB:     in.GetMemoryMib(),
+		StoppedAt:     unixTime(in.GetStoppedAtUnix()),
+		Error:         in.GetError(),
+		CreatedAt:     unixTime(in.GetCreatedAtUnix()),
+		UpdatedAt:     unixTime(in.GetUpdatedAtUnix()),
 	}, nil
 }
 
@@ -177,7 +178,7 @@ func fromProtoWorkspaces(workspaces []*localv1.Workspace) []Workspace {
 func toProtoPorts(ports []Port) []*localv1.Port {
 	out := make([]*localv1.Port, 0, len(ports))
 	for i := range ports {
-		out = append(out, &localv1.Port{Host: uint32(ports[i].Host), Guest: uint32(ports[i].Guest), Protocol: ports[i].Protocol})
+		out = append(out, &localv1.Port{Host: uint32(ports[i].Host), Guest: uint32(ports[i].Guest), Protocol: ports[i].Protocol, HostIp: ports[i].HostIP})
 	}
 	return out
 }
@@ -188,7 +189,7 @@ func fromProtoPorts(ports []*localv1.Port) []Port {
 		if port == nil || port.GetHost() > 65535 || port.GetGuest() > 65535 {
 			continue
 		}
-		out = append(out, Port{Host: uint16(port.GetHost()), Guest: uint16(port.GetGuest()), Protocol: port.GetProtocol()}) // #nosec G115 -- both values are bounded above
+		out = append(out, Port{Host: uint16(port.GetHost()), Guest: uint16(port.GetGuest()), Protocol: port.GetProtocol(), HostIP: port.GetHostIp()}) // #nosec G115 -- both values are bounded above
 	}
 	return out
 }
