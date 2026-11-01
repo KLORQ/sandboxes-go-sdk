@@ -93,6 +93,8 @@ type PolicyService interface {
 	MutatePolicy(ctx context.Context, id, action string, rule NetworkRule) (*Sandbox, error)
 	GetPolicyProfile(ctx context.Context) (string, error)
 	SetPolicyProfile(ctx context.Context, profile string) (string, error)
+	GetGlobalPolicy(ctx context.Context) (allow, deny []NetworkRule, err error)
+	MutateGlobalPolicy(ctx context.Context, action string, rule NetworkRule) (allow, deny []NetworkRule, err error)
 }
 
 // PolicyServiceProvider is optionally implemented by root clients that expose
@@ -127,6 +129,14 @@ func (unsupportedPolicyService) GetPolicyProfile(context.Context) (string, error
 
 func (unsupportedPolicyService) SetPolicyProfile(context.Context, string) (string, error) {
 	return "", &Error{Code: errorCodeUnsupported, Message: "policy profiles are not supported by this client"}
+}
+
+func (unsupportedPolicyService) GetGlobalPolicy(context.Context) ([]NetworkRule, []NetworkRule, error) {
+	return nil, nil, &Error{Code: errorCodeUnsupported, Message: "global policy is not supported by this client"}
+}
+
+func (unsupportedPolicyService) MutateGlobalPolicy(context.Context, string, NetworkRule) ([]NetworkRule, []NetworkRule, error) {
+	return nil, nil, &Error{Code: errorCodeUnsupported, Message: "global policy is not supported by this client"}
 }
 
 // PortService replaces a sandbox's published ports.
@@ -242,6 +252,8 @@ type NetworkRule struct {
 	Protocol string
 	CIDR     string
 	Port     uint16
+	Domain   string
+	RuleID   string
 }
 
 // Port maps a host loopback address/port to a guest port.

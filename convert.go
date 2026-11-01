@@ -197,7 +197,7 @@ func fromProtoPorts(ports []*localv1.Port) []Port {
 func toProtoRules(rules []NetworkRule) []*localv1.NetworkRule {
 	out := make([]*localv1.NetworkRule, 0, len(rules))
 	for i := range rules {
-		out = append(out, &localv1.NetworkRule{Protocol: rules[i].Protocol, Cidr: rules[i].CIDR, Port: uint32(rules[i].Port)})
+		out = append(out, &localv1.NetworkRule{Protocol: rules[i].Protocol, Cidr: rules[i].CIDR, Port: uint32(rules[i].Port), Domain: rules[i].Domain, RuleId: rules[i].RuleID})
 	}
 	return out
 }
@@ -208,7 +208,7 @@ func fromProtoRules(rules []*localv1.NetworkRule) []NetworkRule {
 		if rule == nil || rule.GetPort() > 65535 {
 			continue
 		}
-		out = append(out, NetworkRule{Protocol: rule.GetProtocol(), CIDR: rule.GetCidr(), Port: uint16(rule.GetPort())}) // #nosec G115 -- port is bounded above
+		out = append(out, NetworkRule{Protocol: rule.GetProtocol(), CIDR: rule.GetCidr(), Port: uint16(rule.GetPort()), Domain: rule.GetDomain(), RuleID: rule.GetRuleId()}) // #nosec G115 -- port is bounded above
 	}
 	return out
 }

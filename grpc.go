@@ -16,6 +16,7 @@ type client struct {
 	operations  localv1.OperationServiceClient
 	registry    localv1.RegistryCredentialServiceClient
 	accounts    localv1.AccountServiceClient
+	secrets     localv1.SecretServiceClient
 	callTimeout time.Duration
 }
 
@@ -38,6 +39,7 @@ func New(cfg Config) (Client, error) {
 		operations:  localv1.NewOperationServiceClient(conn),
 		registry:    localv1.NewRegistryCredentialServiceClient(conn),
 		accounts:    localv1.NewAccountServiceClient(conn),
+		secrets:     localv1.NewSecretServiceClient(conn),
 		callTimeout: cfg.CallTimeout,
 	}, nil
 }
@@ -90,6 +92,28 @@ func (c *client) GetPolicyProfile(ctx context.Context) (string, error) {
 		return "", mapError(err)
 	}
 	return resp.GetProfile(), nil
+}
+
+func (c *client) GetGlobalPolicy(ctx context.Context) ([]NetworkRule, []NetworkRule, error) {
+	ctx, cancel := c.context(ctx)
+	defer cancel()
+	resp, err := c.sandboxes.GetGlobalPolicy(ctx, &localv1.GetGlobalPolicyRequest{})
+	if err != nil {
+		return nil, nil, mapError(err)
+	}
+	return fromProtoRules(resp.GetAllow()), fromProtoRules(resp.GetDeny()), nil
+}
+
+func (c *client) MutateGlobalPolicy(ctx context.Context, action string, rule NetworkRule) ([]NetworkRule, []NetworkRule, error) {
+	ctx, cancel := c.context(ctx)
+	defer cancel()
+	resp, err := c.sandboxes.MutateGlobalPolicy(ctx, &localv1.MutateGlobalPolicyRequest{
+		Action: action, Rule: toProtoRules([]NetworkRule{rule})[0],
+	})
+	if err != nil {
+		return nil, nil, mapError(err)
+	}
+	return fromProtoRules(resp.GetAllow()), fromProtoRules(resp.GetDeny()), nil
 }
 
 func (c *client) SetPolicyProfile(ctx context.Context, profile string) (string, error) {
