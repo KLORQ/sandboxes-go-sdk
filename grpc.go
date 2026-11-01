@@ -157,6 +157,7 @@ func (s sandboxClient) Create(ctx context.Context, req CreateRequest) (*Operatio
 		Agent:          req.Agent,
 		Detached:       req.Detached,
 		PolicyProfile:  req.PolicyProfile,
+		Privileged:     req.Privileged,
 		Env:            req.Env,
 	})
 	if err != nil {

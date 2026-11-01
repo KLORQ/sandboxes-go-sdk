@@ -273,6 +273,8 @@ type CreateRequest struct {
 	Agent         string
 	Detached      bool
 	PolicyProfile string
+	// Privileged enables the dedicated Docker profile. It is never implicit.
+	Privileged bool
 	// Env is baked into the sandbox for every process, including exec.
 	Env map[string]string
 }
