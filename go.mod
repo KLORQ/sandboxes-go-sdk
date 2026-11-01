@@ -3,7 +3,7 @@ module github.com/KLORQ/sandboxes-go-sdk
 go 1.27
 
 require (
-	github.com/KLORQ/sandboxes-api v0.0.6
+	github.com/KLORQ/sandboxes-api v0.0.7
 	google.golang.org/grpc v1.85.0
 )
 
