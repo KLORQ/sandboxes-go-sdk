@@ -20,8 +20,16 @@ func TestSandboxConversionRejectsInvalidNetworkFields(t *testing.T) {
 			}
 		})
 	}
-	valid := &localv1.Sandbox{Ports: []*localv1.Port{{Host: 65535, Guest: 443}}, Deny: []*localv1.NetworkRule{{Port: 65535}}}
-	if _, err := fromProtoSandbox(valid); err != nil {
+	valid := &localv1.Sandbox{Ports: []*localv1.Port{{Host: 65535, Guest: 443, HostIp: "::1"}}, Deny: []*localv1.NetworkRule{{Port: 65535}}}
+	sb, err := fromProtoSandbox(valid)
+	if err != nil {
 		t.Fatalf("valid daemon response rejected: %v", err)
+	}
+	if len(sb.Ports) != 1 || sb.Ports[0].HostIP != "::1" {
+		t.Fatalf("ports=%+v", sb.Ports)
+	}
+	proto := toProtoPorts(sb.Ports)
+	if len(proto) != 1 || proto[0].GetHostIp() != "::1" {
+		t.Fatalf("proto ports=%+v", proto)
 	}
 }

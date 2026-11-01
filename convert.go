@@ -178,7 +178,7 @@ func fromProtoWorkspaces(workspaces []*localv1.Workspace) []Workspace {
 func toProtoPorts(ports []Port) []*localv1.Port {
 	out := make([]*localv1.Port, 0, len(ports))
 	for i := range ports {
-		out = append(out, &localv1.Port{Host: uint32(ports[i].Host), Guest: uint32(ports[i].Guest), Protocol: ports[i].Protocol})
+		out = append(out, &localv1.Port{Host: uint32(ports[i].Host), Guest: uint32(ports[i].Guest), Protocol: ports[i].Protocol, HostIp: ports[i].HostIP})
 	}
 	return out
 }
@@ -189,7 +189,7 @@ func fromProtoPorts(ports []*localv1.Port) []Port {
 		if port == nil || port.GetHost() > 65535 || port.GetGuest() > 65535 {
 			continue
 		}
-		out = append(out, Port{Host: uint16(port.GetHost()), Guest: uint16(port.GetGuest()), Protocol: port.GetProtocol()}) // #nosec G115 -- both values are bounded above
+		out = append(out, Port{Host: uint16(port.GetHost()), Guest: uint16(port.GetGuest()), Protocol: port.GetProtocol(), HostIP: port.GetHostIp()}) // #nosec G115 -- both values are bounded above
 	}
 	return out
 }
